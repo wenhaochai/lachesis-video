@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Lachesis</title>
+<style>
+  @font-face { font-family: 'Instrument Sans'; font-weight: 400; src: url('../assets/fonts/InstrumentSans-Regular.ttf'); }
+  @font-face { font-family: 'Instrument Sans'; font-weight: 500; src: url('../assets/fonts/InstrumentSans-Medium.ttf'); }
+  @font-face { font-family: 'Instrument Sans'; font-weight: 600; src: url('../assets/fonts/InstrumentSans-SemiBold.ttf'); }
+  html, body { margin: 0; background: #fff; }
+  canvas { display: block; width: 1920px; height: 1080px; }
+  #scrub { position: fixed; left: 0; bottom: 0; width: 1920px; display: none; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<input id="scrub" type="range" min="0" max="1" step="0.0005" value="0">
+<script src="video.js"></script>
+<script>
+  // Preview only: ?t=5.2 draws that moment, ?scrub adds a slider, ?play plays in real time.
+  (async () => {
+    while (!window.__ready) await new Promise(r => setTimeout(r, 50));
+    const q = new URLSearchParams(location.search);
+    if (q.has('t')) renderFrame(+q.get('t'));
+    if (q.has('scrub')) {
+      const s = document.getElementById('scrub'); s.style.display = 'block';
+      s.oninput = () => renderFrame(+s.value * window.DUR);
+    }
+    if (q.has('play')) {
+      const t0 = performance.now(), step = () => { const t = (performance.now() - t0) / 1000; renderFrame(t % window.DUR); requestAnimationFrame(step); };
+      requestAnimationFrame(step);
+    }
+  })();
+</script>
+</body>
+</html>
