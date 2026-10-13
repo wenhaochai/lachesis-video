@@ -45,6 +45,8 @@
   const G = { blue: '#4285F4', red: '#DB4437', yellow: '#F4B400', green: '#0F9D58', grey: '#5F6368', ink: '#202124', ink2: '#3C4043', rule: '#DADCE0', soft: '#F1F3F4', paper: '#F8F9FA', arrow: '#9AA0A6' };
   const tone = (c, p) => mix('#FFFFFF', c, p);
   const font = (size, weight = 400) => `${weight} ${size}px ${FACE}`;
+  // type scale, one size per role
+  const TY = { title: 104, number: 58, head: 42, label: 30, caption: 32, body: 28, chip: 26, small: 24, micro: 22, code: 21 };
 
   // ---- primitives
   function group(cx, cy, s, a, fn) { if (s <= 0 || a <= 0) return; ctx.save(); ctx.globalAlpha *= a; ctx.translate(cx, cy); ctx.scale(s, s); fn(); ctx.restore(); }
@@ -159,7 +161,7 @@
     });
     ctx.restore();
   }
-  const CAP = { size: 32, maxW: 1320, y1: 972, y2: [930, 976] };
+  const CAP = { size: TY.caption, maxW: 1320, y1: 972, y2: [930, 976] };
   function caption(t, sentence, accent, color, at, out) {
     if (t < at || t > out + 0.5) return;
     const words = sentence.split(' '), a0 = accent ? sentence.indexOf(accent) : -1;
@@ -200,8 +202,8 @@
     ctx.restore();
   }
   function drawTitle(t) {
-    if (t < T.titleOut + 0.5) { const q = accel(ramp(t, T.titleOut, 0.4)); titleMark(W / 2, 250, 96, 1 - q, q * 40); }
-    if (t >= T.title) { const q = emph(ramp(t, T.title, 0.7)); titleMark(W / 2, 520, 112, q, (1 - q) * -36); }
+    if (t < T.titleOut + 0.5) { const q = accel(ramp(t, T.titleOut, 0.4)); titleMark(W / 2, 270, TY.title, 1 - q, q * 40); }
+    if (t >= T.title) { const q = emph(ramp(t, T.title, 0.7)); titleMark(W / 2, 520, TY.title, q, (1 - q) * -36); }
   }
 
   // ======================================================================== cover: the pipeline
@@ -216,13 +218,13 @@
   function ptxCard(cx, cy, s, a) {
     group(cx, cy, s, a, () => {
       rbox(-320, -165, 640, 330, 22, G.paper, G.rule, 1.5);
-      text('PTX', -284, -118, { size: 24, weight: 500, color: G.grey });
+      text('PTX', -284, -118, { size: TY.small, weight: 500, color: G.grey });
       PTX.forEach((parts, i) => {
         let x = -284; const y = -66 + i * 42;
         parts.forEach(seg => {
           const op = /^[a-z]/.test(seg);
-          text(seg, x, y, { size: 21, mono: true, color: op ? G.blue : G.grey });
-          x += textW(seg, 21, 400, true);
+          text(seg, x, y, { size: TY.code, mono: true, color: op ? G.blue : G.grey });
+          x += textW(seg, TY.code, 400, true);
         });
       });
     });
@@ -230,8 +232,8 @@
   function lachesisCard(cx, cy, s, a) {
     group(cx, cy, s, a, () => {
       rbox(-140, -80, 280, 160, 26, tone(G.blue, 0.14));
-      text('Lachesis', 0, -4, { size: 42, weight: 600, color: G.blue, align: 'center' });
-      text('Lean checker', 0, 40, { size: 24, color: G.grey, align: 'center' });
+      text('Lachesis', 0, -4, { size: TY.head, weight: 600, color: G.blue, align: 'center' });
+      text('Lean checker', 0, 40, { size: TY.small, color: G.grey, align: 'center' });
     });
   }
   const CHECKS = ['no data races', 'no out-of-bounds accesses', 'outputs equal the math'];
@@ -239,8 +241,8 @@
     group(cx, cy, s, a, () => {
       rbox(-240, -165, 480, 330, 22, tone(G.green, 0.1));
       badge(-196, -104, 22, p, G.green);
-      text('proved', -162, -92, { size: 36, weight: 600, color: G.green });
-      CHECKS.forEach((c, i) => { badge(-190, -26 + i * 62, 14, clamp(p * 3 - 1 - i * 0.4), G.green); text(c, -164, -16 + i * 62, { size: 28, color: G.ink2 }); });
+      text('proved', -162, -90, { size: TY.head, weight: 600, color: G.green });
+      CHECKS.forEach((c, i) => { badge(-190, -26 + i * 62, 14, clamp(p * 3 - 1 - i * 0.4), G.green); text(c, -164, -16 + i * 62, { size: TY.body, color: G.ink2 }); });
     });
   }
   function drawCover(t) {
@@ -267,9 +269,9 @@
   const fmt5 = v => (v < 0 ? '−' : '') + Math.abs(v).toFixed(5);
   const shade = v => tone(G.blue, 0.1 + 0.75 * (0.5 + 0.5 * Math.tanh(v / 1.6)));
   const PITCH = 40, CELL = 35;
-  const POS = { A: [270, 488], B: [270, 718], CK: [1180, 430], CR: [1180, 690], D: [1500, 560] };
-  const KCARD = { x: 760, y: 430, w: 360, h: 130 }, RCARD = { x: 760, y: 690, w: 360, h: 130 };
-  const GSTART = [430, 600];
+  const POS = { A: [420, 488], B: [420, 718], CK: [1330, 430], CR: [1330, 690], D: [1330, 560] };
+  const KCARD = { x: 910, y: 430, w: 360, h: 130 }, RCARD = { x: 910, y: 690, w: 360, h: 130 };
+  const GSTART = [580, 600], NUMX = 1500;
   const blend = (M0, M1, q) => M0.map((row, r) => row.map((v, c) => lerp(v, M1[r][c], q)));
   function matrix(cx, cy, M, o = {}) {
     const rows = M.length, cols = M[0].length, sc = o.scale ?? 1, P = PITCH * sc, cs = CELL * sc, a0 = o.a ?? 1;
@@ -290,7 +292,7 @@
   function kernelCard(c, label, color, fill, s = 1, a = 1, pulse = 0) {
     group(c.x, c.y, s * (1 + 0.04 * pulse), a, () => {
       rbox(-c.w / 2, -c.h / 2, c.w, c.h, 26, fill);
-      text(label, 0, 12, { size: 34, weight: 500, color, align: 'center' });
+      text(label, 0, 11, { size: TY.label, weight: 500, color, align: 'center' });
     });
   }
   const TILE_ORDER = [4, 0, 8, 2, 6, 1, 7, 3, 5];   // the kernel computes 2x2 tiles in parallel, the reference row by row
@@ -304,9 +306,9 @@
     const A = blend(prev.A, cur.A, swap), B = blend(prev.B, cur.B, swap);
 
     // the inputs' card
-    group(270, 560, pop(t, T.tIn), fade, () => {
+    group(POS.A[0], 560, pop(t, T.tIn), fade, () => {
       rbox(-150, -290, 300, 580, 26, G.paper);
-      text('random inputs', 0, -240, { size: 26, weight: 500, color: G.grey, align: 'center' });
+      text('random inputs', 0, -240, { size: TY.small, weight: 500, color: G.grey, align: 'center' });
     });
     const flick = (r, c, at) => ramp(t, at + ((r * 7 + c * 3) % 11) * 0.025, 0.3);
     matrix(...POS.A, A, { a: fade, show: (r, c) => flick(r, c, T.tIn + 0.15) });
@@ -351,7 +353,7 @@
       const sweep = (r, c) => ramp(t, T.compare + 0.55 + (r + c) * 0.03, 0.25);
       const resweep = (r, c) => n ? 1 - 0.6 * Math.sin(Math.PI * clamp((u - 0.45 - (r + c) * 0.02) / 0.3)) : 1;
       matrix(...POS.D, C1, { a: fade * ramp(cp, 0.75, 0.25), color: (r, c) => mix(shade(C1[r][c]), tone(G.green, 0.22), sweep(r, c) * resweep(r, c)) });
-      text('|out − ref|', POS.D[0], POS.D[1] - 148, { size: 26, weight: 500, color: G.grey, align: 'center', a: fade * ramp(t, T.compare + 0.7, 0.3) });
+      text('|out − ref|', POS.D[0], POS.D[1] - 146, { size: TY.small, weight: 500, color: G.grey, align: 'center', a: fade * ramp(t, T.compare + 0.7, 0.3) });
     }
     // one entry up close, the tolerance, and the five random inputs
     const va = ramp(t, T.verdict, 0.3) * fade;
@@ -359,18 +361,18 @@
       const [cx, cy] = cellXY(...POS.D, 6, 6, ...CALL);
       ctx.save(); ctx.globalAlpha = va; ctx.strokeStyle = G.ink; ctx.lineWidth = 2.5;
       ctx.beginPath(); ctx.roundRect(cx - CELL / 2 - 4, cy - CELL / 2 - 4, CELL + 8, CELL + 8, 8); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(cx + CELL / 2 + 4, cy); ctx.lineTo(1648, cy); ctx.stroke(); ctx.restore();
+      ctx.beginPath(); ctx.moveTo(cx + CELL / 2 + 4, cy); ctx.lineTo(NUMX - 16, cy); ctx.stroke(); ctx.restore();
       const shown = TRIALS[n && u > 0.85 ? n : Math.max(0, n - 1)];
       const kv = shown.C[CALL[0]][CALL[1]] + shown.D[CALL[0]][CALL[1]], rv = shown.C[CALL[0]][CALL[1]];
-      text(fmt5(kv), 1664, cy - 4, { size: 34, weight: 500, color: G.blue, a: va });
-      text(fmt5(rv), 1664, cy + 40, { size: 34, color: G.grey, a: va });
-      chip('≤ 1e-2', POS.D[0], 740, { center: true, size: 28, color: G.green, fill: tone(G.green, 0.14), icon: 'check', iconColor: G.green, iconP: ramp(t, T.verdict + 0.15, 0.35), s: pop(t, T.verdict + 0.05), a: fade });
+      text(fmt5(kv), NUMX, cy - 4, { size: TY.label, weight: 500, color: G.blue, a: va });
+      text(fmt5(rv), NUMX, cy + 36, { size: TY.label, color: G.grey, a: va });
+      chip('≤ 1e-2', POS.D[0], 740, { center: true, size: TY.chip, color: G.green, fill: tone(G.green, 0.14), icon: 'check', iconColor: G.green, iconP: ramp(t, T.verdict + 0.15, 0.35), s: pop(t, T.verdict + 0.05), a: fade });
       for (let i = 0; i < 5; i++) {
         const x = POS.D[0] + (i - 2) * 46, at = i === 0 ? T.verdict + 0.25 : T.trials[i - 1] + T.trialDur * 0.85;
         dot(x, 818, 16, null, va, G.rule, 2);
         badge(x, 818, 16, ramp(t, at, 0.3), G.green);
       }
-      text('five random inputs', POS.D[0], 872, { size: 24, color: G.grey, align: 'center', a: va });
+      text('five random inputs', POS.D[0], 870, { size: TY.small, color: G.grey, align: 'center', a: va });
     }
   }
 
@@ -393,8 +395,8 @@
     const cw = lerp(KCARD.w, WARP.w, m), ch = lerp(KCARD.h, WARP.h, m), cx = lerp(KCARD.x, WARP.x, m), cy = lerp(KCARD.y, WARP.y, m);
     ctx.save(); ctx.globalAlpha = out; rbox(cx - cw / 2, cy - ch / 2, cw, ch, 26, tone(G.blue, lerp(0.14, 0.08, m))); ctx.restore();
     const la = m < 0.5 ? 1 - m * 2 : (m - 0.5) * 2;
-    text('CUTLASS GEMM', m < 0.5 ? cx : cx - cw / 2 + 36, m < 0.5 ? cy + 12 : cy - ch / 2 + 54, { size: m < 0.5 ? 34 : 30, weight: 500, color: G.blue, align: m < 0.5 ? 'center' : 'left', a: out * la });
-    text('one warp, 32 threads', WARP.x + WARP.w / 2 - 36, WARP.y - WARP.h / 2 + 54, { size: 26, color: G.grey, align: 'right', a: out * ramp(t, T.warp + 0.6, 0.3) });
+    text('CUTLASS GEMM', m < 0.5 ? cx : cx - cw / 2 + 36, m < 0.5 ? cy + 11 : cy - ch / 2 + 54, { size: TY.label, weight: 500, color: G.blue, align: m < 0.5 ? 'center' : 'left', a: out * la });
+    text('one warp, 32 threads', WARP.x + WARP.w / 2 - 36, WARP.y - WARP.h / 2 + 54, { size: TY.small, color: G.grey, align: 'right', a: out * ramp(t, T.warp + 0.6, 0.3) });
 
     // phases: the first pick lands on thread 0 and the warp goes on; after the rewind it lands on thread 7
     const beat2 = t >= T.rewind + 0.3;
@@ -410,7 +412,7 @@
       if (picked) { fill = G.blue; num = '#FFFFFF'; stroke = G.blue; }
       group(x, y, s, out, () => {
         rbox(-CS / 2, -CS / 2, CS, CS, 14, fill, stroke, 2);
-        text(String(k), 0, 8, { size: 22, weight: 500, color: num, align: 'center' });
+        text(String(k), 0, 8, { size: TY.micro, weight: 500, color: num, align: 'center' });
       });
     }
     // the hardware's pick hops across the threads
@@ -431,35 +433,42 @@
     const stuck = beat2 ? ramp(t, T.stall, 0.4) : 0;
     group(BAR.x, BAR.y, pop(t, T.barrier), out, () => {
       rbox(-BAR.w / 2, -BAR.h / 2, BAR.w, BAR.h, 26, mix(tone(G.yellow, 0.2), tone(G.green, 0.16), done));
-      text('barrier', -BAR.w / 2 + 34, -18, { size: 30, weight: 500, color: G.ink2 });
-      text('arrivals', -BAR.w / 2 + 34, 30, { size: 24, color: G.grey });
+      text('barrier', -BAR.w / 2 + 34, -14, { size: TY.label, weight: 500, color: G.ink2 });
+      text('arrivals', -BAR.w / 2 + 34, 30, { size: TY.small, color: G.grey });
       const pulseR = stuck ? 0.5 + 0.5 * Math.sin((t - T.stall) * Math.PI * 2 / 0.9) : 0;
-      text(arrived ? '1 / 1' : '0 / 1', 80, 20, { size: 58, weight: 600, color: done ? G.green : mix(G.ink, G.red, stuck * (0.55 + 0.45 * pulseR)), align: 'center' });
-      if (done) badge(BAR.w / 2 - 50, 0, 22, done, G.green);
-      if (stuck) clock(BAR.w / 2 - 50, 0, 20, (t - T.stall) * 3.2, G.red, stuck);
+      text(arrived ? '1 / 1' : '0 / 1', 34, 20, { size: TY.number, weight: 600, color: done ? G.green : mix(G.ink, G.red, stuck * (0.55 + 0.45 * pulseR)), align: 'center' });
+      if (done) badge(BAR.w / 2 - 48, 0, 22, done, G.green);
+      if (stuck) clock(BAR.w / 2 - 48, 0, 20, (t - T.stall) * 3.2, G.red, stuck);
     });
     // the copy: started by thread 0 in the first beat, it reaches the barrier
     if (!beat2 && t >= T.copy1 && t < T.go1 + 0.1) {
-      const q = inOut(ramp(t, T.copy1, 0.5)), [x0, y0] = cellPos(0);
-      const x = lerp(x0, BAR.x - 120, q), y = lerp(y0 + 40, BAR.y, q) - Math.sin(Math.PI * q) * 40;
-      chip('data copy', x, y, { center: true, size: 24, color: '#FFFFFF', fill: G.blue, a: out * (1 - ramp(t, T.go1 - 0.05, 0.12)) });
+      // it leaves thread 0 from under the warp's card and slides into the barrier's card
+      const q = inOut(ramp(t, T.copy1 + 0.1, 0.45)), [x0] = cellPos(0);
+      const [x, y] = curvePt(x0, WARP.y + WARP.h / 2 + 46, BAR.x - BAR.w / 2 + 90, BAR.y, q);
+      ctx.save(); ctx.globalAlpha = out * (1 - ramp(t, T.go1, 0.2)); ctx.strokeStyle = G.blue; ctx.lineWidth = 2; ctx.setLineDash([5, 6]);
+      ctx.beginPath(); ctx.moveTo(x0, cellPos(16)[1] + CS / 2 + 6); ctx.lineTo(x0, lerp(cellPos(16)[1] + CS / 2 + 6, WARP.y + WARP.h / 2 + 26, ramp(t, T.copy1, 0.15))); ctx.stroke(); ctx.restore();
+      chip('data copy', x, y, { center: true, size: TY.small, color: '#FFFFFF', fill: G.blue, s: pop(t, T.copy1, 0.3), a: out * (1 - ramp(t, T.go1 - 0.05, 0.12)) });
     }
     // the source's words, one line at a time between the warp and the barrier
     const l1 = win(t, T.scan1 - 0.1, T.rewind, 0.4, 0.3), l2 = win(t, T.assume - 0.05, T.bOut, 0.4, 0.3);
-    text('pick any one thread to start each data copy', W / 2, 622, { size: 30, color: G.grey, align: 'center', a: l1 * out });
+    text('pick any one thread to start each data copy', W / 2, 622, { size: TY.label, color: G.grey, align: 'center', a: l1 * out });
     if (l2 > 0) {
-      const s1 = 'then assume it picked ', s2 = 'thread 0', w1 = textW(s1, 30), w2 = textW(s2, 30, 500), x0 = W / 2 - (w1 + w2) / 2;
-      text(s1, x0, 622, { size: 30, color: G.grey, a: l2 * out });
-      text(s2, x0 + w1, 622, { size: 30, weight: 500, color: G.red, a: l2 * out });
+      const s1 = 'then assume it picked ', s2 = 'thread 0', w1 = textW(s1, TY.label), w2 = textW(s2, TY.label, 500), x0 = W / 2 - (w1 + w2) / 2;
+      text(s1, x0, 622, { size: TY.label, color: G.grey, a: l2 * out });
+      text(s2, x0 + w1, 622, { size: TY.label, weight: 500, color: G.red, a: l2 * out });
     }
-    text('the kernel waits forever', W / 2, 880, { size: 32, weight: 500, color: G.red, align: 'center', a: out * win(t, T.stall + 0.3, T.bOut, 0.4, 0.3) });
+    text('the kernel waits forever', W / 2, 876, { size: TY.label, weight: 500, color: G.red, align: 'center', a: out * win(t, T.stall + 0.3, T.bOut, 0.4, 0.3) });
   }
 
   // ======================================================================== proof: five steps on one event graph
   const STEPS = ['Fix the shape', 'Unroll the loops', 'Match the barriers', 'Find the paths', 'Get the values'];
-  const SW = STEPS.map(s => textW(s, 26, 500) + 22 * 2 + 36);
-  const SGAP = 22, SX0 = W / 2 - (SW.reduce((a, b) => a + b, 0) + SGAP * 4) / 2;
-  const SX = SW.map((w, i) => SX0 + SW.slice(0, i).reduce((a, b) => a + b, 0) + i * SGAP);
+  let SW, SX;   // measured on first use, once the fonts are in
+  function stepLayout() {
+    if (SW) return;
+    SW = STEPS.map(s => textW(s, TY.chip, 500) + 22 + 28 + 14 + 26);
+    const gap = 20, x0 = W / 2 - (SW.reduce((a, b) => a + b, 0) + gap * 4) / 2;
+    SX = SW.map((w, i) => x0 + SW.slice(0, i).reduce((a, b) => a + b, 0) + i * gap);
+  }
   // each step's state at t: 0 pending, 1 active, 2 done, 3 refused, and when it last changed
   function stepState(i, t) {
     if (t < T.fa) {
@@ -473,6 +482,7 @@
     return t >= B[i + 1] ? [2, B[i + 1]] : [1, B[i]];
   }
   function drawSteps(t, a) {
+    stepLayout();
     STEPS.forEach((s, i) => {
       const [st, at] = stepState(i, t), w = SW[i], x = SX[i], y = 150, h = 52, sc = 1 + 0.08 * Math.sin(Math.PI * clamp((t - at) / 0.3));
       const fill = [G.paper, G.blue, tone(G.green, 0.16), tone(G.red, 0.16)][st], col = ['#80868B', '#FFFFFF', G.green, G.red][st];
@@ -481,8 +491,8 @@
         const cx = -w / 2 + 22 + 14;
         if (st === 2) badge(cx, 0, 14, 1, G.green);
         else if (st === 3) badge(cx, 0, 14, 1, G.red, 'cross');
-        else { dot(cx, 0, 14, st === 1 ? '#FFFFFF' : null, 1, st === 1 ? null : '#BDC1C6', 1.5); text(String(i + 1), cx, 6, { size: 18, weight: 600, color: st === 1 ? G.blue : '#80868B', align: 'center' }); }
-        text(s, cx + 26, 9, { size: 26, weight: 500, color: col });
+        else { dot(cx, 0, 14, st === 1 ? '#FFFFFF' : null, 1, st === 1 ? null : '#BDC1C6', 1.5); text(String(i + 1), cx, 7, { size: 18, weight: 600, color: st === 1 ? G.blue : '#80868B', align: 'center' }); }
+        text(s, cx + 28, 9, { size: TY.chip, weight: 500, color: col });
       });
     });
   }
@@ -496,7 +506,7 @@
     const lanes = ramp(t, T.s1 + 0.2, 0.6), ev = x => pop(t, T.s2 + (x - LX0) / (LX1 - LX0) * 0.8, 0.4);
     const B = ramp(t, T.worldB, 0.4);   // the other world: the hardware picked thread 7
     LANE_A.forEach((name, i) => {
-      text(name, LX0 - 30, LY[i] + 9, { size: 26, weight: 500, color: G.grey, align: 'right', a: a * lanes });
+      text(name, LX0 - 30, LY[i] + 9, { size: TY.chip, weight: 500, color: G.grey, align: 'right', a: a * lanes });
       ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = G.rule; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(LX0, LY[i]); ctx.lineTo(lerp(LX0, LX1, inOut(lanes)), LY[i]); ctx.stroke(); ctx.restore();
     });
     // the barrier spans the three thread lanes
@@ -504,7 +514,7 @@
     // elect: a diamond on the chosen thread's lane
     const ey = lerp(LY[0], LY[1], inOut(B));
     group(EA.elect, ey, ev(EA.elect), a, () => { ctx.save(); ctx.rotate(Math.PI / 4); rbox(-11, -11, 22, 22, 4, G.blue); ctx.restore(); });
-    text('elect', EA.elect, ey - 26, { size: 22, color: G.grey, align: 'center', a: a * ramp(t, T.s2 + 0.2, 0.3) });
+    text('elect', EA.elect, ey - 26, { size: TY.micro, color: G.grey, align: 'center', a: a * ramp(t, T.s2 + 0.2, 0.3) });
     // the copy exists only in the world where thread 0 was picked
     const cA = a * (1 - 0.75 * B);
     dot(EA.start, LY[0], 11 * ev(EA.start), G.blue, cA);
@@ -522,7 +532,7 @@
       else badge(EA.wait, LY[i] - 30, 11, r, G.red, 'cross');
       dot(EA.work, LY[i], 11 * ev(EA.work), G.blue, a * (1 - 0.6 * r));
     });
-    chip('refused', EA.bar, LY[3] + 90, { center: true, size: 30, color: G.red, fill: tone(G.red, 0.14), icon: 'cross', iconColor: G.red, iconP: ramp(t, T.refuse + 0.1, 0.35), s: pop(t, T.refuse + 0.05), a });
+    chip('refused', EA.bar, LY[3] + 90, { center: true, size: TY.label, color: G.red, fill: tone(G.red, 0.14), icon: 'cross', iconColor: G.red, iconP: ramp(t, T.refuse + 0.1, 0.35), s: pop(t, T.refuse + 0.05), a });
   }
   // the FlashAttention-3 run: a ring of buffers, three barrier phases, conflicting writes and reads joined by paths
   const RB = rng(77), EB = [];
@@ -533,12 +543,13 @@
     if (a <= 0) return;
     const lanes = ramp(t, T.fa, 0.4), ev = x => pop(t, T.f2 + (x - LX0) / (LX1 - LX0) * 0.6, 0.35);
     LANE_B.forEach((name, i) => {
-      text(name, LX0 - 30, LY[i] + 9, { size: 26, weight: 500, color: G.grey, align: 'right', a: a * lanes });
+      text(name, LX0 - 30, LY[i] + 9, { size: TY.chip, weight: 500, color: G.grey, align: 'right', a: a * lanes });
       ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = G.rule; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(LX0, LY[i]); ctx.lineTo(LX1, LY[i]); ctx.stroke(); ctx.restore();
     });
     PH.forEach(x => group(x, (LY[0] + LY[3]) / 2, ev(x), a, () => rbox(-12, -(LY[3] - LY[0]) / 2 - 26, 24, LY[3] - LY[0] + 52, 12, tone(G.yellow, 0.5))));
     EB.forEach(e => {
-      if (PH.some(b => Math.abs(e.x - b) < 44) || PAIRS.some(P => Math.abs(e.x - P.w[0]) < 30 || Math.abs(e.x - P.r[0]) < 30)) return;
+      if (PH.some(b => Math.abs(e.x - b) < 44)) return;
+      if (PAIRS.some(P => (e.lane === 2 && e.x > P.w[0] - 34 && e.x < P.b + 34) || (e.lane === 3 && e.x > P.b - 34 && e.x < P.r[0] + 34))) return;
       dot(e.x, LY[e.lane], 9 * ev(e.x), e.lane === 2 ? G.blue : tone(G.blue, 0.7), a);
     });
     // match the barriers: every wait is completed by an arrival
@@ -564,8 +575,8 @@
     });
     // get the values: the output
     dot(LX1 - 70, LY[0], 13 * pop(t, T.f5, 0.3), G.green, a);
-    chip('outputs equal the math', LX1 - 70, LY[0] - 62, { center: true, size: 26, color: G.green, fill: tone(G.green, 0.14), icon: 'check', iconColor: G.green, iconP: ramp(t, T.f5 + 0.15, 0.3), s: pop(t, T.f5 + 0.05), a });
-    chip('proved', EA.bar, LY[3] + 90, { center: true, size: 30, color: G.green, fill: tone(G.green, 0.14), icon: 'check', iconColor: G.green, iconP: ramp(t, T.proved + 0.1, 0.35), s: pop(t, T.proved + 0.05), a });
+    chip('outputs equal the math', LX1 - 110, LY[0] - 62, { center: true, size: TY.chip, color: G.green, fill: tone(G.green, 0.14), icon: 'check', iconColor: G.green, iconP: ramp(t, T.f5 + 0.15, 0.3), s: pop(t, T.f5 + 0.05), a });
+    chip('proved', EA.bar, LY[3] + 90, { center: true, size: TY.label, color: G.green, fill: tone(G.green, 0.14), icon: 'check', iconColor: G.green, iconP: ramp(t, T.proved + 0.1, 0.35), s: pop(t, T.proved + 0.05), a });
   }
   function drawProof(t) {
     if (t < T.pIn || t > T.pOut + 0.5) return;
@@ -597,10 +608,10 @@
   function resultCard(t, cx, cy, name, sub, at, a) {
     group(cx, cy, pop(t, at, 0.5), a, () => {
       rbox(-350, -215, 700, 430, 30, G.paper);
-      text(name, -300, -120, { size: 48, weight: 600, color: G.ink });
-      text(sub, -300, -76, { size: 26, color: G.grey });
-      chip('proved', 300 - (textW('proved', 26, 500) + 44 + 34), -138, { size: 26, color: G.green, fill: tone(G.green, 0.14), icon: 'check', iconColor: G.green, iconP: ramp(t, at + 0.35, 0.3) });
-      CHECKS.forEach((c, i) => { badge(-286, 4 + i * 64, 15, ramp(t, at + 0.45 + i * 0.12, 0.35), G.green); text(c, -258, 14 + i * 64, { size: 30, color: G.ink2, a: ramp(t, at + 0.45 + i * 0.12, 0.3) }); });
+      text(name, -300, -122, { size: TY.head, weight: 600, color: G.ink });
+      text(sub, -300, -80, { size: TY.small, color: G.grey });
+      chip('proved', 300 - (textW('proved', TY.chip, 500) + 44 + 34), -136, { size: TY.chip, color: G.green, fill: tone(G.green, 0.14), icon: 'check', iconColor: G.green, iconP: ramp(t, at + 0.35, 0.3) });
+      CHECKS.forEach((c, i) => { badge(-286, 4 + i * 64, 15, ramp(t, at + 0.45 + i * 0.12, 0.35), G.green); text(c, -258, 14 + i * 64, { size: TY.body, color: G.ink2, a: ramp(t, at + 0.45 + i * 0.12, 0.3) }); });
     });
   }
   function drawResults(t) {
