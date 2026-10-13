@@ -128,17 +128,19 @@
   }
 
   // ---- timing (seconds)
+  // Script time. The whole video plays SLOW times slower than these numbers, so every motion keeps its shape.
+  const SLOW = 1.2;
   const T = {
-    coverOut: 1.5, titleOut: 2.15,
-    tIn: 2.45, cards: 2.75, guides: 3.05, feed: 3.35, build: 4.05, compare: 5.15, verdict: 5.9,
-    trials: [6.55, 6.95, 7.35, 7.75], trialDur: 0.4, tOut: 8.55,
-    warp: 8.95, barrier: 9.6, scan1: 9.95, copy1: 10.75, go1: 11.3, rewind: 12.15,
-    scan2: 12.65, assume: 13.45, stall: 13.75, bOut: 15.45,
-    pIn: 15.6, s1: 15.95, s2: 16.65, s3: 17.45, worldB: 17.95, refuse: 18.45,
-    fa: 19.4, f1: 19.7, f2: 20.1, f3: 20.55, f4: 21.0, f5: 21.6, proved: 22.2, pOut: 23.25,
-    rIn: 23.45, rOut: 27.4, title: 27.85, end: 31.0,
+    coverOut: 1.6, titleOut: 2.3,
+    tIn: 2.6, cards: 2.9, guides: 3.2, feed: 3.5, build: 4.25, compare: 5.4, verdict: 6.2,
+    trials: [6.95, 7.5, 8.05, 8.6], trialDur: 0.55, tOut: 9.5,
+    warp: 9.9, barrier: 10.6, scan1: 11.0, copy1: 12.15, go1: 12.7, rewind: 13.8,
+    scan2: 14.3, assume: 15.45, stall: 15.8, bOut: 17.8,
+    pIn: 17.95, s1: 18.3, s2: 19.3, s3: 20.5, worldB: 21.6, refuse: 22.3,
+    fa: 23.9, f1: 24.3, f2: 25.0, f3: 25.8, f4: 26.6, f5: 27.8, proved: 28.6, pOut: 30.0,
+    rIn: 30.2, rOut: 34.4, title: 34.9, end: 38.0,
   };
-  const DUR = T.end;
+  const DUR = T.end, HOP = 1.0;
 
   // ======================================================================== title
   // "Lachesis:" in ink beside a blue tonal chip holding "Lean4Kernel"
@@ -334,7 +336,7 @@
   const BAR = { x: 960, y: 745, w: 440, h: 150 };
   const HOP1 = [21, 5, 14, 26, 9, 0], HOP2 = [3, 18, 11, 29, 2, 7];
   function hop(t, at, seq) {
-    const u = clamp((t - at) / 0.7) * (seq.length - 1), i = Math.min(Math.floor(u), seq.length - 2), f = emph(clamp(u - i));
+    const u = clamp((t - at) / HOP) * (seq.length - 1), i = Math.min(Math.floor(u), seq.length - 2), f = emph(clamp(u - i));
     const [x0, y0] = cellPos(seq[i]), [x1, y1] = cellPos(seq[i + 1]);
     return { x: lerp(x0, x1, f), y: lerp(y0, y1, f), landed: u >= seq.length - 1, k: seq[seq.length - 1] };
   }
@@ -378,12 +380,6 @@
       ctx.save(); ctx.globalAlpha = out * ramp(t, T.assume, 0.3); ctx.strokeStyle = G.red; ctx.lineWidth = 3.5; ctx.setLineDash([9, 7]);
       ctx.beginPath(); ctx.roundRect(x - CS / 2 - 8, y - CS / 2 - 8, CS + 16, CS + 16, 18); ctx.stroke(); ctx.restore();
     }
-    // the copy: started by thread 0 in the first beat, it reaches the barrier
-    if (!beat2 && t >= T.copy1 && t < T.go1 + 0.1) {
-      const q = inOut(ramp(t, T.copy1, 0.5)), [x0, y0] = cellPos(0);
-      const x = lerp(x0, BAR.x - 120, q), y = lerp(y0 + 40, BAR.y, q) - Math.sin(Math.PI * q) * 40;
-      chip('data copy', x, y, { center: true, size: 24, color: '#FFFFFF', fill: G.blue, a: out * (1 - ramp(t, T.go1 - 0.05, 0.12)) });
-    }
     // the barrier: one arrival lets the warp through
     const arrived = !beat2 && t >= T.go1 && t < T.rewind + 0.15;
     const done = arrived ? ramp(t, T.go1, 0.3) * (1 - ramp(t, T.rewind, 0.15)) : 0;
@@ -397,6 +393,12 @@
       if (done) badge(BAR.w / 2 - 50, 0, 22, done, G.green);
       if (stuck) clock(BAR.w / 2 - 50, 0, 20, (t - T.stall) * 3.2, G.red, stuck);
     });
+    // the copy: started by thread 0 in the first beat, it reaches the barrier
+    if (!beat2 && t >= T.copy1 && t < T.go1 + 0.1) {
+      const q = inOut(ramp(t, T.copy1, 0.5)), [x0, y0] = cellPos(0);
+      const x = lerp(x0, BAR.x - 120, q), y = lerp(y0 + 40, BAR.y, q) - Math.sin(Math.PI * q) * 40;
+      chip('data copy', x, y, { center: true, size: 24, color: '#FFFFFF', fill: G.blue, a: out * (1 - ramp(t, T.go1 - 0.05, 0.12)) });
+    }
     // the source's words, one line at a time between the warp and the barrier
     const l1 = win(t, T.scan1 - 0.1, T.rewind, 0.4, 0.3), l2 = win(t, T.assume - 0.05, T.bOut, 0.4, 0.3);
     text('pick any one thread to start each data copy', W / 2, 622, { size: 30, color: G.grey, align: 'center', a: l1 * out });
@@ -446,7 +448,7 @@
   const EA = { elect: 480, start: 640, copy: 760, done: 900, bar: 1040, wait: 1180, work: 1400 };
   function drawGraphA(t, a) {
     if (a <= 0) return;
-    const lanes = ramp(t, T.s1 + 0.2, 0.5), ev = x => pop(t, T.s2 + (x - LX0) / (LX1 - LX0) * 0.6, 0.35);
+    const lanes = ramp(t, T.s1 + 0.2, 0.6), ev = x => pop(t, T.s2 + (x - LX0) / (LX1 - LX0) * 0.8, 0.4);
     const B = ramp(t, T.worldB, 0.4);   // the other world: the hardware picked thread 7
     LANE_A.forEach((name, i) => {
       text(name, LX0 - 30, LY[i] + 9, { size: 26, weight: 500, color: G.grey, align: 'right', a: a * lanes });
@@ -484,7 +486,7 @@
   const PAIRS = PH.map(b => ({ w: [b - 120, LY[2]], r: [b + 100, LY[3]], b }));
   function drawGraphB(t, a) {
     if (a <= 0) return;
-    const lanes = ramp(t, T.fa, 0.4), ev = x => pop(t, T.f2 + (x - LX0) / (LX1 - LX0) * 0.35, 0.3);
+    const lanes = ramp(t, T.fa, 0.4), ev = x => pop(t, T.f2 + (x - LX0) / (LX1 - LX0) * 0.6, 0.35);
     LANE_B.forEach((name, i) => {
       text(name, LX0 - 30, LY[i] + 9, { size: 26, weight: 500, color: G.grey, align: 'right', a: a * lanes });
       ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = G.rule; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(LX0, LY[i]); ctx.lineTo(LX1, LY[i]); ctx.stroke(); ctx.restore();
@@ -495,11 +497,11 @@
       dot(e.x, LY[e.lane], 9 * ev(e.x), e.lane === 2 ? G.blue : tone(G.blue, 0.7), a);
     });
     // match the barriers: every wait is completed by an arrival
-    const m = ramp(t, T.f3, 0.4);
-    PH.forEach((b, k) => [0, 1, 3].forEach(i => { if (m > 0) arrow(b + 14, LY[i], b + 60, LY[i], clamp(m * 1.5 - k * 0.2), { a, color: G.yellow, lw: 3 }); }));
+    const m = ramp(t, T.f3, 0.6);
+    PH.forEach((b, k) => [0, 1, 3].forEach(i => { if (m > 0) arrow(b + 14, LY[i], b + 60, LY[i], clamp(m * 1.6 - k * 0.3), { a, color: G.yellow, lw: 3 }); }));
     // find the paths: each conflicting write and read is joined through a barrier
     PAIRS.forEach((P, k) => {
-      const at = T.f4 + k * 0.18, q = ramp(t, at, 0.3), hit = ramp(t, at - 0.1, 0.15);
+      const at = T.f4 + k * 0.35, q = ramp(t, at, 0.4), hit = ramp(t, at - 0.15, 0.2);
       dot(...P.w, 11, '#FFFFFF', a * hit, mix(G.red, G.green, q), 3);
       dot(...P.r, 11, '#FFFFFF', a * hit, mix(G.red, G.green, q), 3);
       if (q > 0) {
@@ -581,8 +583,8 @@
     drawMark();
   }
 
-  window.DUR = DUR;
-  window.renderFrame = async t => { frame(t); await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); };
+  window.DUR = DUR * SLOW;
+  window.renderFrame = async t => { frame(t / SLOW); await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); };
   await Promise.all([font(112, 600), font(96, 600), font(58, 600), font(48, 600), font(42, 600), font(36, 600), font(34, 500), font(34, 400), font(32, 500), font(30, 500), font(30, 400),
     font(28, 400), font(26, 500), font(26, 400), font(24, 500), font(24, 400), font(22, 500), font(22, 400), font(18, 600)].map(f => document.fonts.load(f)));
   frame(0);
