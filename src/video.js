@@ -3,8 +3,10 @@
 // together; Lachesis measures them with small Princeton-orange rings that slide along each line, and a measured
 // stretch turns orange while its happens-before links weave in between the lines.
 //   Cover: the woven orange net with the title above it. The net slides out to the left.
-//   Tests: 32 threads stream in. Five random inputs drop into them from above; each time the outputs below match
-//     the reference values under them, and a tick is added (the first test slow, the other four fast).
+//   Tests, after KernelBench's correctness check (its Figure 1 and eval code): random inputs A and B go into the
+//     CUTLASS GEMM kernel and into a reference; the kernel's output builds tile by tile, the reference's row by row;
+//     the two outputs overlay into a difference map that stays blank, one cell's two values agree within 1e-2,
+//     and the count runs to 5 / 5 over four more sets of random inputs. The kernel's box opens into its 32 threads.
 //   Bug: a gate (the barrier) closes on the bundle. The hardware picks one thread; when it picks thread 0 the
 //     gate opens and everything flows. Rewound, it picks another thread, the gate stays shut, and work piles up.
 //   Proof: rings measure every thread up to the jam and stop there; they blink, cannot pass, and the orange
@@ -99,14 +101,15 @@
 
   // ---- timing (seconds)
   const T = {
-    unravel: 1.0, spin: 1.7, titleOut: 2.7,
-    test: [3.2, 5.45, 6.0, 6.55, 7.1], testDur: [2.1, 0.5, 0.5, 0.5, 0.5], testOut: 7.8,
-    retract: 8.0, gate: 8.45, label0: 8.6,
-    scan1: 9.0, pulse1: 9.65, open1: 10.15, rewind: 11.4,
-    scan2: 12.0, pile: 12.7,
-    proof: 15.0, halt: 17.2, drain: 18.2,
-    split: 18.8, names: 19.5, meas3: 20.1, meas4: 20.7, namesOut: 24.6,
-    merge: 25.0, end: 30.0,
+    unravel: 1.0, titleOut: 2.2,
+    inputs: 2.4, boxes: 2.8, guides: 3.1, feed: 3.5, build: 4.2, compare: 5.3, verdict: 6.0,
+    trials: [6.75, 7.2, 7.65, 8.1], trialDur: 0.45, testOut: 8.75,
+    open: 9.1, gate: 10.2, label0: 10.3,
+    scan1: 10.7, pulse1: 11.35, open1: 11.85, rewind: 13.1,
+    scan2: 13.7, pile: 14.4,
+    proof: 16.6, halt: 18.8, drain: 19.8,
+    split: 20.4, names: 21.1, meas3: 21.6, meas4: 22.1, namesOut: 25.6,
+    merge: 26.0, end: 30.0,
   };
   const DUR = T.end;
 
@@ -120,7 +123,18 @@
   const N = 32, YC = 560, DY = 12;
   const R = rng(3);
   const PH = Array.from({ length: N }, () => R() * Math.PI * 2);
-  const yB = (k, x, t) => YC + (k - (N - 1) / 2) * DY * swell(x, t) + ripple(x, t) + fine(x, PH[k], t);
+  // The threads come out of the kernel's box: squeezed inside it at first, then spread to their places.
+  const BOXK = { x: 760, y: 420, w: 380, h: 140 }, BOXR = { x: 760, y: 690, w: 380, h: 140 };
+  // Near the box the threads are gathered to its height; away from it they fan out. The gathering relaxes as the box fades.
+  const pinch = t => 1 - inOut(ramp(t, T.open + 0.55, 0.9));
+  const yB = (k, x, t) => {
+    // the bundle is centred on the box while it opens, then settles at the middle of the frame
+    const yc = t < T.open + 1.6 ? lerp(BOXK.y, YC, 1 - pinch(t)) : YC;
+    const y = yc + (k - (N - 1) / 2) * DY * swell(x, t) + ripple(x, t) + fine(x, PH[k], t), pc = pinch(t);
+    if (pc <= 0) return y;
+    const g = pc * Math.exp(-(((x - BOXK.x) / (BOXK.w * 0.75)) ** 2));
+    return lerp(y, BOXK.y + (k - (N - 1) / 2) * 3.4, g);
+  };
   const SPIN = Array.from({ length: N }, () => R() * 0.35);
   const OFF = Array.from({ length: N }, () => R());
 
@@ -144,17 +158,6 @@
   const NDY = 7.2;
   const yNet = (B, h, x, t) => YC + ((2 * h.j + (B === B4 ? 1 : 0)) - (2 * N - 1) / 2) * NDY * swell(x, t) + ripple(x, t, 26) + fine(x, h.ph, t, 1.6);
 
-  // ---- the tests: four inputs drop in above the bundle, four outputs and their references come out below
-  const RT = rng(17);
-  const fmt = (v, d) => (v < 0 ? '−' : '') + Math.abs(v).toFixed(d);
-  const TESTS = T.test.map(() => {
-    const inp = [0, 1, 2, 3].map(() => fmt((RT() * 2 - 1) * 1.9, 2));
-    const out = [0, 1, 2, 3].map(() => RT() * 0.98);
-    const ref = out.map(v => v + (RT() < 0.5 ? 0 : (RT() < 0.5 ? 1 : -1) * 1e-5));
-    return { inp, out: out.map(v => fmt(v, 5)), ref: ref.map(v => fmt(Math.abs(v), 5)) };
-  });
-  const IN_X = [190, 320, 450, 580], IN_Y = 268, OUT_X = [1290, 1460, 1630, 1800], OUT_Y = 848, REF_Y = 896;
-
   // ---- links of the bundle, woven as the rings pass in the proof
   const RL = rng(23), BLINKS = [];
   for (let i = 0; i < 80; i++) {
@@ -170,13 +173,14 @@
   // after the halt the measurement withdraws along each thread, back to the left edge
   const orangeEnd = (k, t) => Math.min(ringX(k, t), lerp(RING_STOP, XL, inOut(ramp(t, T.drain + OFF[k] * 0.15, 0.5))));
 
-  // The bundle's right end: streamed in from the left, retracted to the gate, opened through it, retracted again.
-  function bundleEnd(k, t) {
-    let x = lerp(XL, XR, inOut(ramp(t, T.spin + SPIN[k], 1.1)));
-    x = lerp(x, XG, inOut(ramp(t, T.retract + SPIN[k] * 0.4, 0.55)));
-    x = lerp(x, XR, inOut(ramp(t, T.open1 + 0.15 + SPIN[k] * 0.4, 0.8)));
-    x = lerp(x, XG, inOut(ramp(t, T.rewind + SPIN[k] * 0.4, 0.45)));
-    return x;
+  // The bundle's span: out of the kernel's box to the left edge and the gate, through the open gate, back again.
+  function bundleSpan(k, t) {
+    const p = inOut(ramp(t, T.open + SPIN[k] * 0.25, 0.95));
+    const x0 = lerp(BOXK.x - BOXK.w / 2 + 10, XL, p);
+    let x1 = lerp(BOXK.x + BOXK.w / 2 - 10, XG, p);
+    x1 = lerp(x1, XR, inOut(ramp(t, T.open1 + 0.15 + SPIN[k] * 0.4, 0.8)));
+    x1 = lerp(x1, XG, inOut(ramp(t, T.rewind + SPIN[k] * 0.4, 0.45)));
+    return [x0, x1];
   }
   // The hardware's pick: a black dot hops across threads and lands; first on thread 0, later on thread 13.
   const HOP1 = [17, 6, 24, 2, 11, 0], HOP2 = [5, 21, 9, 27, 3, 13], XPICK = 780;
@@ -193,12 +197,13 @@
   const yAt = (kf, x, t) => { const k0 = Math.floor(kf), k1 = Math.min(N - 1, k0 + 1); return lerp(yB(k0, x, t), yB(k1, x, t), kf - k0); };
 
   function drawBundle(t) {
-    if (t < T.spin || t > T.split + 0.05) return;
-    const pk = pick(t);
+    if (t < T.open || t > T.split + 0.05) return;
+    const pk = pick(t), ta = ramp(t, T.open, 0.25);
     const lw = k => pk && pk.landed && pk.last === k ? lerp(2, 4.4, pk.a) : 2;
     for (let k = 0; k < N; k++) {
       const yf = x => yB(k, x, t);
-      strand(yf, XL, bundleEnd(k, t), K.ink, lw(k));
+      const [x0, x1] = bundleSpan(k, t);
+      strand(yf, x0, x1, K.ink, lw(k), ta);
       if (t >= T.proof) strand(yf, XL, orangeEnd(k, t), K.org, lw(k) + 0.6);
     }
     if (t >= T.proof) BLINKS.forEach(L => {
@@ -215,15 +220,6 @@
       ctx.moveTo(XG, mid + shift); ctx.lineTo(XG, mid + half + shift);
       ctx.stroke(); ctx.restore();
     }
-    // tests: one pulse per thread carries each input across the frame
-    T.test.forEach((s, i) => {
-      const u = (t - s) / T.testDur[i];
-      if (u < 0.2 || u > 0.78) return;
-      for (let k = 0; k < N; k++) {
-        const p = clamp((u - 0.22 - 0.12 * OFF[k]) / 0.4);
-        if (p > 0 && p < 1) { const x = lerp(0, W, inOut(p)); dot(x, yB(k, x, t), 3.6, K.ink); }
-      }
-    });
     // pass: thread 0 carries the copy to the gate, then work flows through the open gate
     if (t >= T.pulse1 && t < T.open1 + 0.05) { const x = lerp(XPICK, XG - 8, inOut(ramp(t, T.pulse1, 0.5))); dot(x, yB(0, x, t), 5.2, K.ink); }
     if (t >= T.open1 + 0.1 && t < T.rewind) for (let k = 0; k < N; k++) {
@@ -290,7 +286,7 @@
 
   // ---- the cover: the finished net, which slides out to the left
   function drawCover(t) {
-    if (t > T.spin + 1.0) return;
+    if (t > 2.6) return;
     const la = 1 - ramp(t, T.unravel, 0.35);
     [B3, B4].forEach(B => B.links.forEach(L => {
       const ha = B.th[L.a], hb = B.th[L.b];
@@ -302,26 +298,148 @@
     }));
   }
 
-  // ---- the tests' numbers and ticks
+  // ---- the tests, after KernelBench's correctness check: random inputs go through the kernel and a reference,
+  //      and the two outputs must agree within atol = rtol = 1e-2 on five sets of random inputs
+  const rgbOf = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
+  const mix = (a, b, p) => { const x = rgbOf(a), y = rgbOf(b); return `rgb(${x.map((v, i) => Math.round(lerp(v, y[i], clamp(p)))).join(',')})`; };
+  const RM = rng(51);
+  const randn = () => { let u = 0; while (u === 0) u = RM(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * RM()); };
+  const CALL = [2, 3];
+  const TRIALS = [0, 1, 2, 3, 4].map(() => {
+    const A = [...Array(6)].map(() => [...Array(4)].map(randn)), B = [...Array(4)].map(() => [...Array(6)].map(randn));
+    const C = A.map(row => [...Array(6)].map((_, j) => row.reduce((s, a, k) => s + a * B[k][j], 0)));
+    const D = C.map(row => row.map(() => (RM() - 0.5) * 6e-5));   // kernel minus reference, far inside the tolerance
+    D[CALL[0]][CALL[1]] = 1.2e-5;
+    return { A, B, C, D };
+  });
+  const fmt5 = v => (v < 0 ? '−' : '') + Math.abs(v).toFixed(5);
+  const shade = v => 0.08 + 0.74 * (0.5 + 0.5 * Math.tanh(v / 1.6));
+  const PITCH = 40, CELL = 35;
+  const POS = { A: [230, 400], B: [230, 690], CK: [1180, 420], CR: [1180, 690], D: [1490, 555] };
+  const GSTART = [380, 545];
+  const blend = (M0, M1, q) => M0.map((row, r) => row.map((v, c) => lerp(v, M1[r][c], q)));
+
+  function matrix(cx, cy, M, o = {}) {
+    const rows = M.length, cols = M[0].length, sc = o.scale ?? 1, P = PITCH * sc, cs = CELL * sc;
+    const w = cols * P - (P - cs), h = rows * P - (P - cs), a0 = o.a ?? 1;
+    if (a0 <= 0) return;
+    ctx.save();
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      const q = o.show ? o.show(r, c) : 1;
+      if (q <= 0) continue;
+      const sz = cs * (0.4 + 0.6 * emph(q)), x = cx - w / 2 + c * P + (cs - sz) / 2, y = cy - h / 2 + r * P + (cs - sz) / 2;
+      ctx.globalAlpha = a0 * clamp(q * 1.5);
+      ctx.fillStyle = o.color ? o.color(r, c) : mix('#FFFFFF', K.ink, shade(M[r][c]));
+      ctx.beginPath(); ctx.roundRect(x, y, sz, sz, 3 * sc); ctx.fill();
+      if (o.outline) { ctx.strokeStyle = '#C3C7CC'; ctx.lineWidth = 1.2; ctx.stroke(); }
+    }
+    ctx.restore();
+  }
+  const cellXY = (cx, cy, rows, cols, r, c) => [cx - (cols * PITCH - (PITCH - CELL)) / 2 + c * PITCH + CELL / 2, cy - (rows * PITCH - (PITCH - CELL)) / 2 + r * PITCH + CELL / 2];
+  function box(B, label, a, pulse = 0, la = 1, fill = true) {
+    if (a <= 0) return;
+    ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = '#FFFFFF'; ctx.strokeStyle = K.ink; ctx.lineWidth = 2 + pulse * 1.6;
+    ctx.beginPath(); ctx.roundRect(B.x - B.w / 2, B.y - B.h / 2, B.w, B.h, 18); if (fill) ctx.fill(); ctx.stroke();
+    if (la > 0) { ctx.globalAlpha = a * la; ctx.fillStyle = K.ink; ctx.font = font(34, 500); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(label, B.x, B.y + 2); }
+    ctx.restore();
+  }
+  // a slim guide with an arrowhead, drawn from its start as p grows
+  const curvePt = (x1, y1, x2, y2, s) => { const m = 1 - s; return [m ** 3 * x1 + 3 * m * m * s * (x1 + x2) / 2 + 3 * m * s * s * (x1 + x2) / 2 + s ** 3 * x2, m ** 3 * y1 + 3 * m * m * s * y1 + 3 * m * s * s * y2 + s ** 3 * y2]; };
+  function guide(x1, y1, x2, y2, p, a = 1) {
+    if (p <= 0 || a <= 0) return;
+    const pt = s => curvePt(x1, y1, x2, y2, s);
+    ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = '#A9AEB5'; ctx.fillStyle = '#A9AEB5'; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (let i = 0; i <= 30; i++) { const [x, y] = pt(p * i / 30); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+    ctx.stroke();
+    if (p > 0.97) { const [xa, ya] = pt(0.96), [xb, yb] = pt(1), g = Math.atan2(yb - ya, xb - xa); ctx.beginPath(); ctx.moveTo(xb, yb); ctx.lineTo(xb - 11 * Math.cos(g - 0.42), yb - 11 * Math.sin(g - 0.42)); ctx.lineTo(xb - 11 * Math.cos(g + 0.42), yb - 11 * Math.sin(g + 0.42)); ctx.closePath(); ctx.fill(); }
+    ctx.restore();
+  }
+  const TILE_ORDER = [4, 0, 8, 2, 6, 1, 7, 3, 5];   // the kernel computes 2x2 tiles in parallel, the reference row by row
   function drawTests(t) {
-    if (t < T.test[0] || t > T.testOut + 0.5) return;
-    const fade = 1 - ramp(t, T.testOut, 0.4);
-    T.test.forEach((s, i) => {
-      const d = T.testDur[i], u = (t - s) / d, gone = i < 4 ? clamp((t - T.test[i + 1]) / 0.12) : 0;
-      if (u < 0) return;
-      const show = (txt, x, y, align, color, weight, at, k, drop) => {
-        const q = emph(clamp((u - at - k * 0.025) / 0.1));
-        if (q <= 0) return;
-        const dq = drop ? emph(clamp((u - 0.13 - k * 0.02) / 0.13)) : 0;
-        ctx.save(); ctx.font = font(36, weight); ctx.textAlign = align; ctx.fillStyle = color;
-        ctx.globalAlpha = q * (1 - gone) * fade * (1 - dq);
-        ctx.fillText(txt, x, y + (1 - q) * 16 + dq * 70); ctx.restore();
-      };
-      TESTS[i].inp.forEach((v, k) => show(v, IN_X[k], IN_Y, 'right', K.ink, 400, 0, k, true));
-      TESTS[i].out.forEach((v, k) => show(v, OUT_X[k], OUT_Y, 'right', K.ink, 500, 0.72, k, false));
-      TESTS[i].ref.forEach((v, k) => show(v, OUT_X[k], REF_Y, 'right', K.grey, 400, 0.82, k, false));
-      ctx.save(); ctx.globalAlpha = fade; tick(OUT_X[3] - 4 * 36 + i * 36 + 4, 946, 22, clamp((u - 0.9) / 0.1)); ctx.restore();
-    });
+    if (t < T.inputs || t > T.open + 1.2) return;
+    const fade = 1 - ramp(t, T.testOut, 0.35);
+    // which set of random inputs is showing, and how far into its trial we are
+    let n = 0;
+    T.trials.forEach((s, i) => { if (t >= s) n = i + 1; });
+    const s0 = n ? T.trials[n - 1] : T.feed, u = n ? (t - s0) / T.trialDur : 0;
+    const cur = TRIALS[n], prev = TRIALS[Math.max(0, n - 1)], swap = n ? emph(clamp(u / 0.3)) : 1;
+    const A = blend(prev.A, cur.A, swap), B = blend(prev.B, cur.B, swap);
+
+    // inputs
+    if (fade > 0) {
+      const flick = (r, c, at) => ramp(t, at + ((r * 7 + c * 3) % 11) * 0.025, 0.3);
+      matrix(...POS.A, A, { a: fade, show: (r, c) => flick(r, c, T.inputs) });
+      matrix(...POS.B, B, { a: fade, show: (r, c) => flick(r, c, T.inputs + 0.1) });
+      riseLine(t, [['random inputs', K.grey]], { x: POS.A[0], y: 850, size: 30, weight: 400, align: 'center', at: T.inputs + 0.3, out: T.testOut });
+    }
+    // guides
+    const gp = k => inOut(ramp(t, T.guides + k * 0.12, 0.5));
+    const toK = [...GSTART, BOXK.x - BOXK.w / 2 - 14, BOXK.y], toR = [...GSTART, BOXR.x - BOXR.w / 2 - 14, BOXR.y];
+    guide(...toK, gp(0), fade);
+    guide(...toR, gp(1), fade);
+    const og = fade * (1 - ramp(t, T.compare, 0.3));   // these guides leave with the outputs
+    guide(BOXK.x + BOXK.w / 2 + 14, BOXK.y, POS.CK[0] - 138, POS.CK[1], inOut(ramp(t, T.build - 0.2, 0.4)), og);
+    guide(BOXR.x + BOXR.w / 2 + 14, BOXR.y, POS.CR[0] - 138, POS.CR[1], inOut(ramp(t, T.build - 0.15, 0.4)), og);
+
+    // the feed: small copies of A and B ride the guides into both boxes; later trials send quicker ones
+    const fly = (p, a) => {
+      if (p <= 0 || p >= 1) return;
+      const fa = a * clamp(p / 0.15) * (1 - clamp((p - 0.8) / 0.2));
+      [A, B].forEach((M, m) => [toK, toR].forEach(G => {
+        const q = inOut(clamp((p - m * 0.12) / 0.88));
+        const [x, y] = curvePt(...G, q);
+        matrix(x, y + (m ? 26 : -26), M, { a: fa * (q > 0 ? 1 : 0), scale: 0.3 });
+      }));
+    };
+    fly(ramp(t, T.feed, 0.7), fade);
+    if (n) fly(clamp((u - 0.15) / 0.35), fade);
+
+    // boxes (the kernel's box is drawn by the bundle once it opens)
+    const pulse = Math.sin(Math.PI * clamp((t - T.feed - 0.5) / 0.4)) + (n ? Math.sin(Math.PI * clamp((u - 0.4) / 0.35)) : 0);
+    const ba = emph(ramp(t, T.boxes, 0.5));
+    box(BOXR, 'reference', ba * fade, pulse);
+    if (t < T.open) box(BOXK, 'CUTLASS GEMM', ba, pulse * fade);
+
+    // outputs: the kernel's tile by tile, the reference's row by row; then both slide together
+    const cp = inOut(ramp(t, T.compare, 0.7));
+    const C1 = TRIALS[0].C;
+    if (cp < 1) {
+      const oa = fade * (1 - ramp(cp, 0.8, 0.2));
+      const tileShow = (r, c) => ramp(t, T.build + TILE_ORDER.indexOf(Math.floor(r / 2) * 3 + Math.floor(c / 2)) * 0.08, 0.25);
+      const rowShow = (r, c) => ramp(t, T.build + (r * 6 + c) * 0.022, 0.2);
+      matrix(lerp(POS.CK[0], POS.D[0], cp), lerp(POS.CK[1], POS.D[1], cp), C1.map((row, r) => row.map((v, c) => v + TRIALS[0].D[r][c])), { a: oa, show: tileShow });
+      matrix(lerp(POS.CR[0], POS.D[0], cp), lerp(POS.CR[1], POS.D[1], cp), C1, { a: oa, show: rowShow });
+    }
+    // the difference map: blank, because every entry is far inside the tolerance
+    if (cp > 0.75) {
+      const da = fade * ramp(cp, 0.75, 0.25), Dm = n ? blend(prev.D, cur.D, swap) : TRIALS[0].D;
+      matrix(...POS.D, Dm, { a: da, outline: true, color: (r, c) => mix('#FFFFFF', K.ink, Math.abs(Dm[r][c]) / 1e-2 * 8) });
+    }
+    // one entry up close, the tick and the count
+    const va = ramp(t, T.verdict, 0.3) * fade;
+    if (va > 0) {
+      const [cx, cy] = cellXY(...POS.D, 6, 6, ...CALL);
+      ctx.save(); ctx.globalAlpha = va; ctx.strokeStyle = K.ink; ctx.lineWidth = 2;
+      ctx.strokeRect(cx - CELL / 2 - 3, cy - CELL / 2 - 3, CELL + 6, CELL + 6);
+      ctx.beginPath(); ctx.moveTo(cx + CELL / 2 + 3, cy); ctx.lineTo(1648, cy); ctx.stroke(); ctx.restore();
+      const shown = TRIALS[n && u > 0.85 ? n : Math.max(0, n - 1)];
+      const kv = shown.C[CALL[0]][CALL[1]] + shown.D[CALL[0]][CALL[1]], rv = shown.C[CALL[0]][CALL[1]];
+      ctx.save(); ctx.globalAlpha = va; ctx.textBaseline = 'alphabetic';
+      ctx.font = font(36, 500); ctx.fillStyle = K.ink; ctx.fillText(fmt5(kv), 1664, cy - 6);
+      ctx.font = font(36, 400); ctx.fillStyle = K.grey; ctx.fillText(fmt5(rv), 1664, cy + 40);
+      ctx.font = font(28, 400); ctx.fillText('within 1e-2', 1664, cy + 82);
+      ctx.restore();
+      const count = n === 0 ? 1 : (u > 0.9 ? n + 1 : n);
+      ctx.save(); ctx.globalAlpha = fade; tick(POS.D[0] - 44, 760, 28, ramp(t, T.verdict + 0.2, 0.3)); ctx.restore();
+      ctx.save(); ctx.globalAlpha = ramp(t, T.verdict + 0.25, 0.3) * fade; ctx.font = font(44, 500); ctx.fillStyle = K.ink; ctx.fillText(`${count} / 5`, POS.D[0] - 14, 776); ctx.restore();
+    }
+  }
+  // The kernel's box stays put while its threads run out of both sides and fan out; then it fades.
+  function drawBoxOpen(t) {
+    if (t < T.open || t > T.open + 1.5) return;
+    const a = 1 - ramp(t, T.open + 0.55, 0.6);
+    box(BOXK, 'CUTLASS GEMM', a, 0, 1);
   }
 
   // ---- title and labels
@@ -343,13 +461,14 @@
     drawBundle(t);
     drawKernels(t);
     drawTests(t);
+    drawBoxOpen(t);
     drawTitle(t);
     drawMark();
   }
 
   window.DUR = DUR;
   window.renderFrame = async t => { frame(t); await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); };
-  await Promise.all([font(96, 600), font(40, 500), font(40, 400), font(36, 500), font(36, 400), font(30, 500)].map(f => document.fonts.load(f)));
+  await Promise.all([font(96, 600), font(40, 500), font(40, 400), font(36, 500), font(36, 400), font(30, 500), font(34, 500), font(34, 400), font(26, 400), font(30, 400), font(44, 500), font(28, 400)].map(f => document.fonts.load(f)));
   frame(0);
   window.__ready = true;
 })();
