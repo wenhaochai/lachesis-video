@@ -137,10 +137,55 @@
     warp: 9.9, barrier: 10.6, scan1: 11.0, copy1: 12.15, go1: 12.7, rewind: 13.8,
     scan2: 14.3, assume: 15.45, stall: 15.8, bOut: 17.8,
     pIn: 17.95, s1: 18.3, s2: 19.3, s3: 20.5, worldB: 21.6, refuse: 22.3,
-    fa: 23.9, f1: 24.3, f2: 25.0, f3: 25.8, f4: 26.6, f5: 27.8, proved: 28.6, pOut: 30.0,
-    rIn: 30.2, rOut: 34.4, title: 34.9, end: 38.0,
+    fa: 24.7, f1: 25.1, f2: 25.8, f3: 26.6, f4: 27.4, f5: 28.6, proved: 29.4, pOut: 30.8,
+    rIn: 31.0, rOut: 35.2, title: 35.7, end: 38.8,
   };
   const DUR = T.end, HOP = 1.0;
+
+  // ======================================================================== captions
+  function riseLine(t, parts, o) {
+    const out = o.out ?? Infinity, step = o.step ?? 0.035, dur = o.dur ?? 0.6;
+    if (t < o.at || t > out + 0.45) return;
+    ctx.save(); ctx.font = font(o.size, o.weight ?? 400); ctx.textBaseline = 'alphabetic';
+    const gap = ctx.measureText(' ').width, wd = parts.map(([u]) => ctx.measureText(u).width);
+    const total = wd.reduce((a, b) => a + b, 0) + gap * (parts.length - 1);
+    let x = o.x - total / 2;
+    const lh = o.size * 1.2, oq = accel(ramp(t, out, 0.4));
+    ctx.beginPath(); ctx.rect(0, o.y - o.size * 1.05, W, o.size * 1.45); ctx.clip();
+    parts.forEach(([u, c], i) => {
+      const q = emph(ramp(t, o.at + i * step, dur));
+      if (q > 0) { ctx.globalAlpha = clamp(q * 1.6) * (1 - oq); ctx.fillStyle = c; ctx.fillText(u, x, o.y + (1 - q) * lh - oq * lh * 1.1); }
+      x += wd[i] + gap;
+    });
+    ctx.restore();
+  }
+  const CAP = { size: 32, maxW: 1320, y1: 972, y2: [930, 976] };
+  function caption(t, sentence, accent, color, at, out) {
+    if (t < at || t > out + 0.5) return;
+    const words = sentence.split(' '), a0 = accent ? sentence.indexOf(accent) : -1;
+    let pos = 0;
+    const marked = words.map(w => { const st = pos; pos += w.length + 1; return [w, a0 >= 0 && st >= a0 && st < a0 + accent.length ? color : G.ink2]; });
+    const width = ws => textW(ws.map(([w]) => w).join(' '), CAP.size);
+    let lines = [marked];
+    if (width(marked) > CAP.maxW) {
+      let best = 1, bestD = Infinity;
+      for (let k = 1; k < marked.length; k++) { const d = Math.abs(width(marked.slice(0, k)) - width(marked) / 2); if (d < bestD) { bestD = d; best = k; } }
+      lines = [marked.slice(0, best), marked.slice(best)];
+    }
+    let n = 0;
+    lines.forEach((ln, li) => {
+      riseLine(t, ln, { x: W / 2, y: lines.length === 1 ? CAP.y1 : CAP.y2[li], size: CAP.size, at: at + n * 0.035, out: out + li * 0.04 });
+      n += ln.length;
+    });
+  }
+  function drawCaptions(t) {
+    caption(t, 'Everyone checks kernels the same way: run them on some random inputs and compare the output with a slow reference.', 'random inputs', G.blue, T.tIn + 0.6, T.tOut);
+    caption(t, "But a kernel's behavior depends on the input, the shape and the timing of thousands of threads, and no test can try them all.", 'no test can try them all.', G.red, T.warp + 0.4, T.rewind - 0.3);
+    caption(t, 'Instead of proving each kernel, we would prove a checker once, so that proving a new kernel becomes a computation.', 'prove a checker once,', G.blue, T.pIn + 0.3, T.worldB - 0.2);
+    caption(t, 'When a checker refuses to approve some code, it is pointing at something.', 'refuses', G.red, T.refuse + 0.15, T.fa - 0.2);
+    caption(t, 'Each proof covers every input and every interleaving of threads.', 'every input and every interleaving of threads.', G.green, T.fa + 0.3, T.pOut - 0.1);
+    caption(t, 'It rules out data races and out-of-bounds accesses and shows the outputs equal the math in exact arithmetic, for one fixed shape.', 'for one fixed shape.', G.blue, T.rIn + 0.6, T.rOut - 0.1);
+  }
 
   // ======================================================================== title
   // "Lachesis:" in ink beside a blue tonal chip holding "Lean4Kernel"
@@ -580,13 +625,14 @@
     drawProof(t);
     drawResults(t);
     drawTitle(t);
+    drawCaptions(t);
     drawMark();
   }
 
   window.DUR = DUR * SLOW;
   window.renderFrame = async t => { frame(t / SLOW); await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); };
   await Promise.all([font(112, 600), font(96, 600), font(58, 600), font(48, 600), font(42, 600), font(36, 600), font(34, 500), font(34, 400), font(32, 500), font(30, 500), font(30, 400),
-    font(28, 400), font(26, 500), font(26, 400), font(24, 500), font(24, 400), font(22, 500), font(22, 400), font(18, 600)].map(f => document.fonts.load(f)));
+    font(28, 400), font(26, 500), font(26, 400), font(24, 500), font(24, 400), font(22, 500), font(22, 400), font(18, 600), font(32, 400)].map(f => document.fonts.load(f)));
   frame(0);
   window.__ready = true;
 })();
