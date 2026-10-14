@@ -204,7 +204,7 @@
     ctx.restore();
   }
   function drawTitle(t) {
-    if (t < T.titleOut + 0.5) { const q = accel(ramp(t, T.titleOut, 0.4)); titleMark(COVER.x + titleWidth(TY.title) / 2, COVER.ty, TY.title, 1 - q, q * 40); }
+    if (t < T.titleOut + 0.5) { const q = accel(ramp(t, T.titleOut, 0.4)); titleMark(W / 2, 430, TY.title, 1 - q, q * 40); }
     if (t >= T.title) { const q = emph(ramp(t, T.title, 0.7)); titleMark(W / 2, 520, TY.title, q, (1 - q) * -36); }
   }
 
@@ -247,63 +247,35 @@
       CHECKS.forEach((c, i) => { badge(-190, -26 + i * 62, 14, clamp(p * 3 - 1 - i * 0.4), G.green); text(c, -164, -16 + i * 62, { size: TY.body, color: G.ink2 }); });
     });
   }
-  // The cover: the title and the three guarantees top left, a large proved seal top right, and below them a wide
-  // event graph of FlashAttention-3 (lanes, barrier phases, events, happens-before paths in green). The paths light
-  // up one after another, then everything clears for the tests.
-  const COVER = { x: 150, ty: 230, cy: 352, y0: 520, lanes: ['warp 0', 'warp 1', 'warp 2', 'warp 3', 'TMA', 'tensor core'], dy: 64, bars: [520, 800, 1080, 1360, 1640] };
-  const RC = rng(91), CEV = [];
-  COVER.lanes.forEach((_, i) => { for (let j = 0; j < 16; j++) { const x = lerp(340, 1900, (j + 0.2 + RC() * 0.6) / 16); if (!COVER.bars.some(b => Math.abs(x - b) < 40)) CEV.push({ lane: i, x, r: RC() }); } });
-  const CPATHS = COVER.bars.map((b, k) => ({ b, from: [b - 90 - RC() * 60, 4], to: [b + 80 + RC() * 60, k % 2 ? 5 : Math.floor(RC() * 4)] }));
-  function coverGraph(t, a, clear) {
+  // The cover: the title, and under it one quiet strip of an event graph: three lanes, two barriers, a few events,
+  // and one happens-before path in green that ends in a check. A light runs along the path, then the strip clears.
+  const STRIP = { x0: 600, x1: 1320, ly: [612, 672, 732], bars: [820, 1100], dots: [[0, 690], [0, 980], [1, 660], [1, 950], [1, 1210], [2, 900], [2, 1180]] };
+  const SPATH = [[700, 732], [820, 732], [820, 612], [1236, 612]];
+  function drawCover(t) {
+    if (t > T.coverOut + 1.0) return;
+    const out = 1 - accel(ramp(t, T.coverOut, 0.5)), a = out, dy = (1 - out) * 24;
     if (a <= 0) return;
-    const ly = i => COVER.y0 + i * COVER.dy, top = ly(0) - 30, bot = ly(COVER.lanes.length - 1) + 30;
-    const cut = x => clamp((x - 200 - clear * 1900) / 120 + 1);   // the graph clears from left to right
-    ctx.save(); ctx.globalAlpha = a;
-    COVER.lanes.forEach((name, i) => {
-      text(name, 300, ly(i) + 8, { size: TY.small, weight: 500, color: G.grey, align: 'right', a: cut(300) });
-      ctx.strokeStyle = G.rule; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(Math.max(330, 200 + clear * 1900), ly(i)); ctx.lineTo(W + 20, ly(i)); ctx.stroke();
-    });
-    COVER.bars.forEach(b => { const c = cut(b); if (c > 0) rbox(b - 12, top, 24, (bot - top), 12, tone(G.yellow, 0.5 * c + 0.0001)); });
-    const onPath = e => CPATHS.some(P => (e.lane === P.from[1] && e.x > P.from[0] - 36 && e.x < P.b + 20) || (e.lane === P.to[1] && e.x > P.b - 20 && e.x < P.to[0] + 36));
-    CEV.forEach(e => { if (onPath(e)) return; const c = cut(e.x); if (c > 0) dot(e.x, ly(e.lane), 9 * c, e.lane === 4 ? G.blue : e.lane === 5 ? tone(G.blue, 0.6) : tone(G.blue, 0.78)); });
-    CPATHS.forEach((P, k) => {
-      const pts = [[P.from[0], ly(P.from[1])], [P.b, ly(P.from[1])], [P.b, ly(P.to[1])], [P.to[0], ly(P.to[1])]];
-      const seg = pts.slice(1).map((q, i) => Math.hypot(q[0] - pts[i][0], q[1] - pts[i][1])), total = seg.reduce((x, y) => x + y, 0);
-      const c = cut(P.to[0]);
-      if (c <= 0) return;
-      ctx.save(); ctx.globalAlpha = a * c; ctx.strokeStyle = G.green; ctx.lineWidth = 4; ctx.lineCap = ctx.lineJoin = 'round';
-      ctx.beginPath(); ctx.moveTo(...pts[0]); pts.slice(1).forEach(q => ctx.lineTo(...q)); ctx.stroke();
-      // a light runs along each path in turn
-      const run = clamp((t - 0.35 - k * 0.22) / 0.7);
-      if (run > 0 && run < 1) {
-        let d = emph(run) * total, i = 0;
-        while (i < seg.length - 1 && d > seg[i]) { d -= seg[i]; i++; }
-        const f = clamp(d / seg[i]), x = lerp(pts[i][0], pts[i + 1][0], f), y = lerp(pts[i][1], pts[i + 1][1], f);
-        dot(x, y, 16, tone(G.green, 0.25)); dot(x, y, 8, G.green);
-      }
-      dot(...pts[0], 11, '#FFFFFF', 1, G.green, 3); dot(...pts[3], 11, '#FFFFFF', 1, G.green, 3);
-      ctx.restore();
-    });
+    ctx.save(); ctx.globalAlpha = a; ctx.translate(0, dy);
+    STRIP.ly.forEach(y => { ctx.strokeStyle = G.rule; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(STRIP.x0, y); ctx.lineTo(STRIP.x1, y); ctx.stroke(); });
+    STRIP.bars.forEach(b => rbox(b - 10, STRIP.ly[0] - 26, 20, STRIP.ly[2] - STRIP.ly[0] + 52, 10, tone(G.yellow, 0.5)));
+    STRIP.dots.forEach(([l, x]) => dot(x, STRIP.ly[l], 8, tone(G.blue, 0.75)));
+    ctx.strokeStyle = G.green; ctx.lineWidth = 4; ctx.lineCap = ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(...SPATH[0]); SPATH.slice(1).forEach(q => ctx.lineTo(...q)); ctx.stroke();
+    dot(...SPATH[0], 10, '#FFFFFF', 1, G.green, 3);
+    const seg = SPATH.slice(1).map((q, i) => Math.hypot(q[0] - SPATH[i][0], q[1] - SPATH[i][1])), total = seg.reduce((x, y) => x + y, 0);
+    const run = clamp((t - 0.45) / 1.1);
+    if (run > 0 && run < 1) {
+      let d = emph(run) * total, i = 0;
+      while (i < seg.length - 1 && d > seg[i]) { d -= seg[i]; i++; }
+      const f = clamp(d / seg[i]);
+      const x = lerp(SPATH[i][0], SPATH[i + 1][0], f), y = lerp(SPATH[i][1], SPATH[i + 1][1], f);
+      dot(x, y, 15, tone(G.green, 0.25)); dot(x, y, 7, G.green);
+    }
+    const pulse = 1 + 0.12 * Math.sin(Math.PI * clamp((t - 1.5) / 0.35));
+    badge(SPATH[3][0] + 26, SPATH[3][1], 22 * pulse, 1, G.green);
     ctx.restore();
   }
-  function drawCover(t) {
-    if (t > T.coverOut + 1.2) return;
-    const out = i => 1 - accel(ramp(t, T.coverOut + i * 0.08, 0.4));
-    // the three guarantees
-    let x = COVER.x;
-    CHECKS.forEach((c, i) => {
-      const w = chip(c, x, COVER.cy, { size: TY.chip, color: G.green, fill: tone(G.green, 0.12), icon: 'check', iconColor: G.green, s: lerp(0.9, 1, out(i)), a: out(i) });
-      x += w + 16;
-    });
-    // the seal, which pulses once the paths have run
-    const sp = 1 + 0.06 * Math.sin(Math.PI * clamp((t - 1.5) / 0.4));
-    group(1600, 290, sp * lerp(0.85, 1, out(3)), out(3), () => {
-      dot(0, 0, 118, tone(G.green, 0.12)); dot(0, 0, 92, G.green);
-      badge(0, -16, 58, 1, G.green);
-      text('proved', 0, 56, { size: TY.chip, weight: 600, color: '#FFFFFF', align: 'center' });
-    });
-    coverGraph(t, 1, inOut(ramp(t, T.coverOut + 0.1, 0.7)));
-  }
+
 
 
   // ======================================================================== tests
@@ -357,10 +329,6 @@
     const A = blend(prev.A, cur.A, swap), B = blend(prev.B, cur.B, swap);
 
     // the inputs' card
-    group(POS.A[0], 560, pop(t, T.tIn), fade, () => {
-      rbox(-150, -290, 300, 580, 26, G.paper);
-      text('random inputs', 0, -240, { size: TY.small, weight: 500, color: G.grey, align: 'center' });
-    });
     const flick = (r, c, at) => ramp(t, at + ((r * 7 + c * 3) % 11) * 0.025, 0.3);
     matrix(...POS.A, A, { a: fade, show: (r, c) => flick(r, c, T.tIn + 0.15) });
     matrix(...POS.B, B, { a: fade, show: (r, c) => flick(r, c, T.tIn + 0.25) });
@@ -423,7 +391,6 @@
         dot(x, 818, 16, null, va, G.rule, 2);
         badge(x, 818, 16, ramp(t, at, 0.3), G.green);
       }
-      text('five random inputs', POS.D[0], 870, { size: TY.small, color: G.grey, align: 'center', a: va });
     }
   }
 
@@ -536,13 +503,13 @@
     stepLayout();
     STEPS.forEach((s, i) => {
       const [st, at] = stepState(i, t), w = SW[i], x = SX[i], y = 150, h = 52, sc = 1 + 0.08 * Math.sin(Math.PI * clamp((t - at) / 0.3));
-      const fill = [G.paper, G.blue, tone(G.green, 0.16), tone(G.red, 0.16)][st], col = ['#80868B', '#FFFFFF', G.green, G.red][st];
+      const fill = [null, G.blue, null, tone(G.red, 0.14)][st], col = ['#9AA0A6', '#FFFFFF', G.green, G.red][st];
       group(x + w / 2, y, sc * pop(t, T.pIn + i * 0.06, 0.4), a, () => {
-        rbox(-w / 2, -h / 2, w, h, h / 2, fill, st === 0 ? G.rule : null, 1.5);
+        if (fill) rbox(-w / 2, -h / 2, w, h, h / 2, fill);
         const cx = -w / 2 + 22 + 14;
         if (st === 2) badge(cx, 0, 14, 1, G.green);
         else if (st === 3) badge(cx, 0, 14, 1, G.red, 'cross');
-        else { dot(cx, 0, 14, st === 1 ? '#FFFFFF' : null, 1, st === 1 ? null : '#BDC1C6', 1.5); text(String(i + 1), cx, 7, { size: 18, weight: 600, color: st === 1 ? G.blue : '#80868B', align: 'center' }); }
+        else { dot(cx, 0, 14, st === 1 ? '#FFFFFF' : null, 1, st === 1 ? null : '#DADCE0', 1.5); text(String(i + 1), cx, 7, { size: 18, weight: 600, color: st === 1 ? G.blue : '#80868B', align: 'center' }); }
         text(s, cx + 28, 9, { size: TY.chip, weight: 500, color: col });
       });
     });
@@ -636,9 +603,7 @@
     // the kernel under proof, with the launch it is proved for
     const kA = 1 - ramp(t, T.fa - 0.2, 0.25), kB = ramp(t, T.fa, 0.3);
     chip('CUTLASS GEMM', 120, 262, { size: 26, color: G.blue, fill: tone(G.blue, 0.14), s: pop(t, T.pIn + 0.1), a: out * kA });
-    chip('one launch: 32 threads, fixed sizes', 120 + textW('CUTLASS GEMM', 26, 500) + 44 + 16, 262, { size: 26, color: G.ink2, s: pop(t, T.s1 + 0.1), a: out * kA });
     chip('FlashAttention-3', 120, 262, { size: 26, color: G.blue, fill: tone(G.blue, 0.14), s: pop(t, T.fa), a: out * kB });
-    chip('one launch: 512 threads, fixed sizes', 120 + textW('FlashAttention-3', 26, 500) + 44 + 16, 262, { size: 26, color: G.ink2, s: pop(t, T.f1 + 0.05), a: out * kB });
     drawGraphA(t, out * (1 - ramp(t, T.fa - 0.25, 0.3)));
     drawGraphB(t, out * ramp(t, T.fa, 0.3));
   }
