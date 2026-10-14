@@ -133,14 +133,14 @@
   // Script time. The whole video plays SLOW times slower than these numbers, so every motion keeps its shape.
   const SLOW = 1.2;
   const T = {
-    coverOut: 1.6, titleOut: 2.3,
-    tIn: 2.6, cards: 2.9, guides: 3.2, feed: 3.5, build: 4.25, compare: 5.4, verdict: 6.2,
-    trials: [6.95, 7.5, 8.05, 8.6], trialDur: 0.55, tOut: 9.5,
-    warp: 9.9, barrier: 10.6, scan1: 11.0, copy1: 12.15, go1: 12.7, rewind: 13.8,
-    scan2: 14.3, assume: 15.45, stall: 15.8, bOut: 17.8,
-    pIn: 17.95, s1: 18.3, s2: 19.3, s3: 20.5, worldB: 21.6, refuse: 22.3,
-    fa: 24.7, f1: 25.1, f2: 25.8, f3: 26.6, f4: 27.4, f5: 28.6, proved: 29.4, pOut: 30.8,
-    rIn: 31.0, rOut: 35.2, title: 35.7, end: 38.8,
+    coverOut: 2.4, titleOut: 2.9,
+    tIn: 3.5, cards: 3.8, guides: 4.1, feed: 4.4, build: 5.15, compare: 6.3, verdict: 7.1,
+    trials: [7.85, 8.4, 8.95, 9.5], trialDur: 0.55, tOut: 10.4,
+    warp: 10.8, barrier: 11.5, scan1: 11.9, copy1: 13.05, go1: 13.6, rewind: 14.7,
+    scan2: 15.2, assume: 16.35, stall: 16.7, bOut: 18.7,
+    pIn: 18.85, s1: 19.2, s2: 20.2, s3: 21.4, worldB: 22.5, refuse: 23.2,
+    fa: 25.6, f1: 26, f2: 26.7, f3: 27.5, f4: 28.3, f5: 29.5, proved: 30.3, pOut: 31.7,
+    rIn: 31.9, rOut: 36.1, title: 36.6, end: 39.7,
   };
   const DUR = T.end, HOP = 1.0;
 
@@ -161,7 +161,8 @@
     });
     ctx.restore();
   }
-  const CAP = { size: TY.caption, maxW: 1320, y1: 972, y2: [930, 976] };
+  const CAP = { size: TY.caption, maxW: 1320, y1: 884, y2: [852, 898] };
+  const LIFT = 84;   // every scene with a caption is drawn this much higher
   function caption(t, sentence, accent, color, at, out) {
     if (t < at || t > out + 0.5) return;
     const words = sentence.split(' '), a0 = accent ? sentence.indexOf(accent) : -1;
@@ -191,6 +192,7 @@
 
   // ======================================================================== title
   // "Lachesis:" in ink beside a blue tonal chip holding "Lean4Kernel"
+  const titleWidth = size => textW('Lachesis:', size, 600) + size * 0.3 + textW('Lean4Kernel', size, 600) + size * 0.64;
   function titleMark(cx, cy, size, a, rise = 0) {
     if (a <= 0) return;
     const wL = textW('Lachesis:', size, 600), wK = textW('Lean4Kernel', size, 600), pad = size * 0.32, gap = size * 0.3;
@@ -202,7 +204,7 @@
     ctx.restore();
   }
   function drawTitle(t) {
-    if (t < T.titleOut + 0.5) { const q = accel(ramp(t, T.titleOut, 0.4)); titleMark(W / 2, 270, TY.title, 1 - q, q * 40); }
+    if (t < T.titleOut + 0.5) { const q = accel(ramp(t, T.titleOut, 0.4)); titleMark(COVER.x + titleWidth(TY.title) / 2, COVER.ty, TY.title, 1 - q, q * 40); }
     if (t >= T.title) { const q = emph(ramp(t, T.title, 0.7)); titleMark(W / 2, 520, TY.title, q, (1 - q) * -36); }
   }
 
@@ -245,15 +247,64 @@
       CHECKS.forEach((c, i) => { badge(-190, -26 + i * 62, 14, clamp(p * 3 - 1 - i * 0.4), G.green); text(c, -164, -16 + i * 62, { size: TY.body, color: G.ink2 }); });
     });
   }
-  function drawCover(t) {
-    if (t > T.coverOut + 0.8) return;
-    const out = i => 1 - accel(ramp(t, T.coverOut + i * 0.08, 0.4));
-    ptxCard(470, 650, lerp(0.9, 1, out(0)), out(0));
-    arrow(800, 650, 868, 650, 1, { a: out(1) });
-    lachesisCard(1010, 650, lerp(0.9, 1, out(1)), out(1));
-    arrow(1162, 650, 1248, 650, 1, { a: out(2) });
-    provedCard(1500, 650, lerp(0.9, 1, out(2)), out(2));
+  // The cover: the title and the three guarantees top left, a large proved seal top right, and below them a wide
+  // event graph of FlashAttention-3 (lanes, barrier phases, events, happens-before paths in green). The paths light
+  // up one after another, then everything clears for the tests.
+  const COVER = { x: 150, ty: 230, cy: 352, y0: 520, lanes: ['warp 0', 'warp 1', 'warp 2', 'warp 3', 'TMA', 'tensor core'], dy: 64, bars: [520, 800, 1080, 1360, 1640] };
+  const RC = rng(91), CEV = [];
+  COVER.lanes.forEach((_, i) => { for (let j = 0; j < 16; j++) { const x = lerp(340, 1900, (j + 0.2 + RC() * 0.6) / 16); if (!COVER.bars.some(b => Math.abs(x - b) < 40)) CEV.push({ lane: i, x, r: RC() }); } });
+  const CPATHS = COVER.bars.map((b, k) => ({ b, from: [b - 90 - RC() * 60, 4], to: [b + 80 + RC() * 60, k % 2 ? 5 : Math.floor(RC() * 4)] }));
+  function coverGraph(t, a, clear) {
+    if (a <= 0) return;
+    const ly = i => COVER.y0 + i * COVER.dy, top = ly(0) - 30, bot = ly(COVER.lanes.length - 1) + 30;
+    const cut = x => clamp((x - 200 - clear * 1900) / 120 + 1);   // the graph clears from left to right
+    ctx.save(); ctx.globalAlpha = a;
+    COVER.lanes.forEach((name, i) => {
+      text(name, 300, ly(i) + 8, { size: TY.small, weight: 500, color: G.grey, align: 'right', a: cut(300) });
+      ctx.strokeStyle = G.rule; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(Math.max(330, 200 + clear * 1900), ly(i)); ctx.lineTo(W + 20, ly(i)); ctx.stroke();
+    });
+    COVER.bars.forEach(b => { const c = cut(b); if (c > 0) rbox(b - 12, top, 24, (bot - top), 12, tone(G.yellow, 0.5 * c + 0.0001)); });
+    const onPath = e => CPATHS.some(P => (e.lane === P.from[1] && e.x > P.from[0] - 36 && e.x < P.b + 20) || (e.lane === P.to[1] && e.x > P.b - 20 && e.x < P.to[0] + 36));
+    CEV.forEach(e => { if (onPath(e)) return; const c = cut(e.x); if (c > 0) dot(e.x, ly(e.lane), 9 * c, e.lane === 4 ? G.blue : e.lane === 5 ? tone(G.blue, 0.6) : tone(G.blue, 0.78)); });
+    CPATHS.forEach((P, k) => {
+      const pts = [[P.from[0], ly(P.from[1])], [P.b, ly(P.from[1])], [P.b, ly(P.to[1])], [P.to[0], ly(P.to[1])]];
+      const seg = pts.slice(1).map((q, i) => Math.hypot(q[0] - pts[i][0], q[1] - pts[i][1])), total = seg.reduce((x, y) => x + y, 0);
+      const c = cut(P.to[0]);
+      if (c <= 0) return;
+      ctx.save(); ctx.globalAlpha = a * c; ctx.strokeStyle = G.green; ctx.lineWidth = 4; ctx.lineCap = ctx.lineJoin = 'round';
+      ctx.beginPath(); ctx.moveTo(...pts[0]); pts.slice(1).forEach(q => ctx.lineTo(...q)); ctx.stroke();
+      // a light runs along each path in turn
+      const run = clamp((t - 0.35 - k * 0.22) / 0.7);
+      if (run > 0 && run < 1) {
+        let d = emph(run) * total, i = 0;
+        while (i < seg.length - 1 && d > seg[i]) { d -= seg[i]; i++; }
+        const f = clamp(d / seg[i]), x = lerp(pts[i][0], pts[i + 1][0], f), y = lerp(pts[i][1], pts[i + 1][1], f);
+        dot(x, y, 16, tone(G.green, 0.25)); dot(x, y, 8, G.green);
+      }
+      dot(...pts[0], 11, '#FFFFFF', 1, G.green, 3); dot(...pts[3], 11, '#FFFFFF', 1, G.green, 3);
+      ctx.restore();
+    });
+    ctx.restore();
   }
+  function drawCover(t) {
+    if (t > T.coverOut + 1.2) return;
+    const out = i => 1 - accel(ramp(t, T.coverOut + i * 0.08, 0.4));
+    // the three guarantees
+    let x = COVER.x;
+    CHECKS.forEach((c, i) => {
+      const w = chip(c, x, COVER.cy, { size: TY.chip, color: G.green, fill: tone(G.green, 0.12), icon: 'check', iconColor: G.green, s: lerp(0.9, 1, out(i)), a: out(i) });
+      x += w + 16;
+    });
+    // the seal, which pulses once the paths have run
+    const sp = 1 + 0.06 * Math.sin(Math.PI * clamp((t - 1.5) / 0.4));
+    group(1600, 290, sp * lerp(0.85, 1, out(3)), out(3), () => {
+      dot(0, 0, 118, tone(G.green, 0.12)); dot(0, 0, 92, G.green);
+      badge(0, -16, 58, 1, G.green);
+      text('proved', 0, 56, { size: TY.chip, weight: 600, color: '#FFFFFF', align: 'center' });
+    });
+    coverGraph(t, 1, inOut(ramp(t, T.coverOut + 0.1, 0.7)));
+  }
+
 
   // ======================================================================== tests
   const RM = rng(51);
@@ -630,11 +681,13 @@
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, W, H);
     drawCover(t);
+    ctx.save(); ctx.translate(0, -LIFT);
     drawTests(t);
     drawBug(t);
     drawCarry(t);
     drawProof(t);
     drawResults(t);
+    ctx.restore();
     drawTitle(t);
     drawCaptions(t);
     drawMark();
