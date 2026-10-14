@@ -10,6 +10,8 @@ A 48-second promo for Lachesis, the Lean verifier that proves GPU kernels correc
 
 ## Files
 
+- `lachesis.mp4`: the finished video, 1920 × 1080, 60 fps, silent.
+
 - `src/video.html` and `src/video.js`: the director. `renderFrame(t)` draws the frame at `t` seconds and reads no clock. Timings sit in `T` near the top of `video.js`. `src/video.v1.bak.js` to `src/video.v3.bak.js` keep the earlier thread-motif cuts in black, white and Princeton orange.
 - `src/render.mjs`: drives the Chromium that Playwright caches over the DevTools protocol with Node 22, no npm packages.
 - `src/sheet.py`: tiles test stills into one contact sheet.

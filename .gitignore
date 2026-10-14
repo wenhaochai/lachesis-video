@@ -1,4 +1,5 @@
 stills/
 *.png
 *.mp4
+!lachesis.mp4
 .DS_Store
